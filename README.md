@@ -1,4 +1,4 @@
-# ELHAM: Entropy-driven Latent Hierarchical Attribution Maps
+# Elham: Entropy-driven Latent Hierarchical Attribution Maps
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/pytorch-2.0+-red)](https://pytorch.org)
