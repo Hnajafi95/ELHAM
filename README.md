@@ -34,6 +34,25 @@ $$A = \sum_l \text{Upsample}(\Delta I_l)$$
 
 ---
 
+## Metrics Explained
+
+### Insertion AUC ↑ *(higher is better)*
+Start with a blurred image and gradually **add** pixels in order of importance (most important first). Measure how fast the model's confidence in the predicted class recovers. A good explanation identifies pixels that, when revealed, quickly restore the model's prediction. The AUC (area under the confidence curve) is reported — higher means faster recovery.
+
+### Deletion AUC ↓ *(lower is better)*
+Start with the original image and gradually **remove** pixels in order of importance. Measure how fast the model's confidence drops. A good explanation identifies pixels whose removal causes the prediction to collapse. Lower AUC means the confidence drops faster when important pixels are deleted.
+
+### Pointing Game ↑ *(higher is better)*
+Does the **single most important pixel** (the max of the attribution map) fall within the object region? For centered datasets like CIFAR and SVHN, we check if the max falls within the center quarter of the image. A score of 1.0 means the max always lands on the object. Simple but effective test of localization.
+
+### Energy Pointing Game (EPG) ↑ *(higher is better)*
+A more robust variant: what **fraction of total attribution mass** falls within a compact region around the maximum? Unlike the regular Pointing Game which only checks a single pixel, EPG measures concentration — it rewards attributions where the energy is tightly clustered. No ground truth boxes needed.
+
+### Sparseness (Gini) ↑ *(higher is better)*
+How **concentrated** is the attribution mass? Measured via the Gini coefficient of the flattened attribution map. A score of 1.0 means all attribution is on a single pixel. A score of 0.0 means uniform attribution across the entire image. Higher sparseness = more focused, easier-to-interpret explanations.
+
+---
+
 ## Multi-Resolution Attribution (ImageNet, ResNet50)
 
 ELHAM produces attribution maps at every network depth, revealing how the model's certainty evolves:
