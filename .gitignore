@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+/tmp/
+*.zip
+elham_results/
+.venv/
+venv/

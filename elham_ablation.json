@@ -1,0 +1,51 @@
+[
+  {
+    "name": "layer1+layer2",
+    "Ins_AUC": 0.4920030244422377,
+    "Del_AUC": 0.3861300075775375,
+    "EnergyPoint": 0.3161815454307265,
+    "Sparseness": 0.45857816244159144
+  },
+  {
+    "name": "layer2+layer3",
+    "Ins_AUC": 0.5161722776051707,
+    "Del_AUC": 0.2891277734165116,
+    "EnergyPoint": 0.5160585414030463,
+    "Sparseness": 0.6252555776221599
+  },
+  {
+    "name": "layer3+layer4",
+    "Ins_AUC": 0.5269146883771463,
+    "Del_AUC": 0.3379398535687384,
+    "EnergyPoint": 0.4147962564933502,
+    "Sparseness": 0.4933020685680294
+  },
+  {
+    "name": "layer1+layer2+layer3",
+    "Ins_AUC": 0.5429750212536602,
+    "Del_AUC": 0.3660003985122361,
+    "EnergyPoint": 0.28023749017581834,
+    "Sparseness": 0.3864788253006512
+  },
+  {
+    "name": "layer2+layer3+layer4",
+    "Ins_AUC": 0.5626857508921239,
+    "Del_AUC": 0.28283062435543493,
+    "EnergyPoint": 0.43739367501964166,
+    "Sparseness": 0.5554600640906852
+  },
+  {
+    "name": "All layers",
+    "Ins_AUC": 0.5707466836293557,
+    "Del_AUC": 0.3332630008740428,
+    "EnergyPoint": 0.2991702876410457,
+    "Sparseness": 0.36343701385039606
+  },
+  {
+    "name": "layer4 only",
+    "Ins_AUC": 0.4342779818886872,
+    "Del_AUC": 0.38436500395614226,
+    "EnergyPoint": 0.0,
+    "Sparseness": 0.0
+  }
+]
