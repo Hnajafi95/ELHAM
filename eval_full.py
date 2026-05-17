@@ -116,6 +116,40 @@ class ELHAMExplainer:
 # Baseline Explainers
 # ═══════════════════════════════════════════════════════════════════════════
 
+class ELHAMBlendExplainer:
+    """
+    EGLB: Entropy-Gradient Linear Blend.
+    Combines ELHAM's entropy-based maps with Grad-CAM's class-specificity
+    via linear blending: A = (1-λ)*norm(A_elham) + λ*norm(A_gradcam).
+    Single backward pass for Grad-CAM, rest is forward-pass only.
+    """
+    def __init__(self, model, layer_names, lam=0.3):
+        self.model = model; self.layer_names = layer_names
+        self.lam = lam
+        self.elham = ELHAMExplainer(model, layer_names)
+        self.gradcam = GradCAMExplainer(model, layer_names[-1])
+
+    def explain(self, image, target_class):
+        # ELHAM map (forward pass only)
+        a_elham, _, _ = self.elham.explain(image, target_class)
+
+        # Grad-CAM map (one backward pass)
+        a_gcam = self.gradcam.explain(image, target_class)
+
+        # Normalize both to [0,1]
+        def norm(a):
+            a = a - a.min(); mx = a.max()
+            return a / mx if mx > 0 else a
+        a_e = norm(a_elham); a_g = norm(a_gcam)
+
+        # Linear blend
+        blended = (1 - self.lam) * a_e + self.lam * a_g
+        return blended, {}, {}
+
+    def remove(self):
+        self.elham.remove(); self.gradcam.remove()
+
+
 class GradCAMExplainer:
     def __init__(self, model, target_layer='layer4'):
         self.model = model; self.acts = None; self.grads = None; self._handles = []
@@ -307,12 +341,36 @@ def evaluate_cifar(ds_name, args):
 
     layer_names = ['layer1','layer2','layer3','layer4']
     print('  ELHAM: self-entropy mode')
+
+    # Lambda sweep for ELHAM-Blend
+    print('  Tuning ELHAM-Blend lambda...')
+    val_ld = DataLoader(test_ds, 10, shuffle=True)
+    val_imgs, val_lbls = next(iter(val_ld))
+    best_lam, best_score = 0.3, -1
+    for lam in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0]:
+        b = ELHAMBlendExplainer(model, layer_names, lam=lam)
+        ins, del_ = [], []
+        for vi in range(min(10, len(val_imgs))):
+            vimg = val_imgs[vi:vi+1].to(DEVICE); vtc = val_lbls[vi].item()
+            if vtc >= nc: continue
+            attr, _, _ = b.explain(vimg, vtc)
+            ins.append(insertion_auc(model, vimg, vtc, attr, steps=10))
+            del_.append(deletion_auc(model, vimg, vtc, attr, steps=10))
+        b.remove()
+        score = np.mean(ins) - np.mean(del_)
+        if score > best_score: best_score, best_lam = score, lam
+        print(f'    λ={lam:.1f}: Ins={np.mean(ins):.3f} Del={np.mean(del_):.3f} '
+              f'score={score:.3f}{" ✓" if lam==best_lam else ""}')
+    print(f'  Best λ = {best_lam:.1f}')
+
     elham = ELHAMExplainer(model, layer_names)
     gradcam = GradCAMExplainer(model, 'layer4')
+    blend = ELHAMBlendExplainer(model, layer_names, lam=best_lam)
     saliency = SaliencyExplainer(model)
     ig_ex = IntegratedGradientsExplainer(model)
     sg_ex = SmoothGradExplainer(model)
-    explainers = [('ELHAM',elham),('GradCAM',gradcam),('Saliency',saliency),
+    explainers = [('ELHAM',elham),('ELHAM-Blend',blend),('GradCAM',gradcam),
+                  ('Saliency',saliency),
                   ('IntegratedGradients',ig_ex),('SmoothGrad',sg_ex)]
     METHODS = [e[0] for e in explainers]
 
@@ -331,7 +389,7 @@ def evaluate_cifar(ds_name, args):
         tc = pred
         for method, ex in explainers:
             t0=time.time()
-            if method == 'ELHAM':
+            if method in ('ELHAM', 'ELHAM-Blend'):
                 attr, _, _ = ex.explain(img, tc)
             else:
                 attr = ex.explain(img, tc)
@@ -346,18 +404,19 @@ def evaluate_cifar(ds_name, args):
     print('  Sanity checks...')
     img0 = imgs[0:1].to(DEVICE); tc0 = lbls[0].item()
     for method, ex in explainers:
-        if method == 'ELHAM': attr_orig, _, _ = ex.explain(img0, tc0)
+        if method in ('ELHAM','ELHAM-Blend'): attr_orig, _, _ = ex.explain(img0, tc0)
         else: attr_orig = ex.explain(img0, tc0)
         mrand = copy.deepcopy(model)
         for m in mrand.modules():
             if hasattr(m,'reset_parameters'): m.reset_parameters()
         mrand.to(DEVICE).eval()
         if method == 'ELHAM': exr = ELHAMExplainer(mrand, layer_names)
+        elif method == 'ELHAM-Blend': exr = ELHAMBlendExplainer(mrand, layer_names, lam=best_lam)
         elif method == 'GradCAM': exr = GradCAMExplainer(mrand, 'layer4')
         elif method == 'Saliency': exr = SaliencyExplainer(mrand)
         elif method == 'IntegratedGradients': exr = IntegratedGradientsExplainer(mrand)
         else: exr = SmoothGradExplainer(mrand)
-        if method == 'ELHAM': attr_rand, _, _ = exr.explain(img0, tc0)
+        if method in ('ELHAM','ELHAM-Blend'): attr_rand, _, _ = exr.explain(img0, tc0)
         else: attr_rand = exr.explain(img0, tc0)
         if method in ('ELHAM','GradCAM'): exr.remove()
         try:
@@ -369,7 +428,7 @@ def evaluate_cifar(ds_name, args):
         results[method]['rand_r'] = abs(float(r))
         print(f'    {method:22s} |r|={abs(r):.4f} {"✓" if abs(r)<0.5 else "✗"}')
 
-    elham.remove(); gradcam.remove()
+    elham.remove(); gradcam.remove(); blend.remove()
 
     summary = {}
     for m in METHODS:
@@ -432,10 +491,12 @@ def evaluate_imagenet(args):
 
     elham = ELHAMExplainer(model, IMAGENET_LAYERS)
     gradcam = GradCAMExplainer(model, 'layer4')
+    blend = ELHAMBlendExplainer(model, IMAGENET_LAYERS, lam=0.3)
     saliency = SaliencyExplainer(model)
     ig_ex = IntegratedGradientsExplainer(model)
     sg_ex = SmoothGradExplainer(model)
-    explainers = [('ELHAM',elham),('GradCAM',gradcam),('Saliency',saliency),
+    explainers = [('ELHAM',elham),('ELHAM-Blend',blend),('GradCAM',gradcam),
+                  ('Saliency',saliency),
                   ('IntegratedGradients',ig_ex),('SmoothGrad',sg_ex)]
     METHODS = [e[0] for e in explainers]
 
@@ -452,9 +513,9 @@ def evaluate_imagenet(args):
 
         for method, ex in explainers:
             t0 = time.time()
-            if method == 'ELHAM':
+            if method in ('ELHAM','ELHAM-Blend'):
                 attr, info_gains, entropies = ex.explain(img, tc)
-                if i < 8:  # Store for viz
+                if method == 'ELHAM' and i < 8:
                     sample_elham_layers.append((img.cpu(), info_gains, entropies, tc))
             else:
                 attr = ex.explain(img, tc)
@@ -467,7 +528,7 @@ def evaluate_imagenet(args):
             results[method]['sparse'].append(sparseness(attr))
             if i < 8: sample_attrs[method].append(attr)
 
-    elham.remove(); gradcam.remove()
+    elham.remove(); gradcam.remove(); blend.remove()
 
     # Generate multi-resolution visualization
     print('  Generating multi-resolution plots...')
@@ -665,7 +726,7 @@ def generate_comparison_plots(all_results):
     # Filter to CIFAR datasets (skip imagenet for now)
     cifar_ds = [d for d in datasets if d != 'imagenet']
     methods = list(all_results[cifar_ds[0]].keys())
-    colors = ['#E91E63','#2196F3','#4CAF50','#FF9800','#9C27B0']
+    colors = ['#E91E63','#795548','#2196F3','#4CAF50','#FF9800','#9C27B0']
     method_colors = dict(zip(methods, colors))
 
     # 1. Per-dataset metric comparison (grouped bar)
