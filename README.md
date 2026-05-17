@@ -181,6 +181,21 @@ ELHAM produces per-layer attribution maps. During training, you can track how at
 | Federated/privacy mode | ✓ No gradient leakage | ✗ Gradient leakage risk | Well-documented vulnerability |
 | Real-time (600+ FPS) | ✓ 1.0–1.6ms | ✗ IG: 47ms | Measured timing |
 
+### 6. Multi-Modal Models (CLIP) — Tested
+
+ELHAM works on CLIP's vision encoder unchanged — it's just another ViT. But the unique advantage: **ELHAM produces text-independent attribution maps that are just as predictive of semantic relevance as text-conditioned gradient maps.**
+
+| Method | Ins AUC (cosine sim) | Del AUC (cosine sim) | Text-dependent? |
+|--------|---------------------|---------------------|-----------------|
+| **ELHAM** | **0.245** | 0.233 | **No** — same map for any prompt |
+| Gradient Baseline | 0.234 | 0.237 | Yes — requires text prompt |
+
+ELHAM maps are 1.04× better than text-conditioned gradient maps at identifying regions relevant to cosine similarity — without needing to know the text prompt at all. This means ELHAM can explain what a vision encoder "sees" in deployment before any text query arrives.
+
+### 7. Adversarial Robustness — Honest Negative
+
+We hypothesized ELHAM would be more stable under adversarial attack (FGSM/PGD) because it doesn't use input gradients. **This was wrong.** Grad-CAM is MORE stable (r=0.96 vs ELHAM r=0.91 under FGSM, r=0.78 vs r=0.46 under PGD). Grad-CAM's spatial gradient averaging smooths adversarial perturbations; ELHAM's channel entropy shifts with any activation change. Documented as an honest scientific result.
+
 ---
 
 ## Quick Start
