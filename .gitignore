@@ -7,3 +7,11 @@ __pycache__/
 elham_results/
 .venv/
 venv/
+
+# experiment data + model artifacts (never commit)
+data_cache/
+validation/data_cache/
+*.pth
+*.pt
+*.log
+nohup.out
